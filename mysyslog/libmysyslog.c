@@ -1,14 +1,59 @@
-#include "mysyslog.h"
 #include <stdio.h>
-#include <time.h>
+#include <stdlib.h>
+#include <stdarg.h>
 
-int mysyslog(const char* msg, int level, int driver, int format, const char* path) {
-    // Пример базовой реализации
-    FILE* file = fopen(path, "a");
-    if (!file) return -1;
+#define DEBUG 0
+#define INFO 1
+#define WARN 2
+#define ERROR 3
+#define CRITICAL 4
 
-    time_t now = time(NULL);
-    fprintf(file, "%ld %d %d %d %s\n", now, level, driver, format, msg);
-    fclose(file);
+typedef int (*format_func)(FILE *stream, const char *msg, int level);
+
+int text_format(FILE *stream, const char *msg, int level) {
+    fprintf(stream, "%s: %s\n", level_strings[level], msg);
+    return 0;
+}
+
+int json_format(FILE *stream, const char *msg, int level) {
+    fprintf(stream, "{\"level\": \"%s\", \"message\": \"%s\"}\n", level_strings[level], msg);
+    return 0;
+}
+
+int csv_format(FILE *stream, const char *msg, int level) {
+    fprintf(stream, "%s,%s\n", level_strings[level], msg);
+    return 0;
+}
+
+typedef struct {
+    const char *name;
+    format_func func;
+} format_driver;
+
+format_driver format_drivers[] = {
+    {"text", text_format},
+    {"json", json_format},
+    {"csv", csv_format},
+};
+
+int mysyslog(const char *msg, int level, int driver, int format, const char *path) {
+    if (driver < 0 || driver >= NUM_DRIVERS) {
+        return -1;
+    }
+
+    if (format < 0 || format >= NUM_FORMATS) {
+        return -1;
+    }
+
+    FILE *stream = fopen(path, "a");
+    if (!stream) {
+        return -1;
+    }
+
+    format_func format_func = format_drivers[format].func;
+    format_func(stream, msg, level);
+
+    fclose(stream);
+
     return 0;
 }
